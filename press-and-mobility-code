@@ -1,0 +1,415 @@
+# Install needed packages
+
+install.packages("zoo")
+library(zoo)
+library(ggplot2)
+library(patchwork)
+
+################################################################################
+
+Piedmont (PM)
+
+################################################################################
+
+# Facebook Movement Range Data - Piemonte (PM)
+
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper/movement-range-data-2021-11-21/movement-range-data-2021-12-02")
+
+mov21_PM <- read.table("movement-range-2021-12-02.txt", sep="\t", fill=TRUE, header=TRUE, quote="", encoding="UTF-8")
+mov21_PM <- mov21_PM[which(mov21_PM$country=="ITA"),]
+mov21_PM <- mov21_PM[which(mov21_PM$polygon_name=="Piemonte"),]
+
+mov21_PM$ratio_multiple_tile_users <- 1 - mov21_PM$all_day_ratio_single_tile_users
+
+data_mov21_PM <- data.frame(
+  day = as.Date(mov21_PM$ds),
+  mov = mov21_PM$ratio_multiple_tile_users)
+
+data_mov21_PM_time <- data_mov21_PM[data_mov21_PM$day >= "2021-11-02" & data_mov21_PM$day <= "2021-11-20",]
+
+p_mov21_PM_time <- ggplot(data_mov21_PM_time, aes(x=day, y=mov)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_mov21_PM_time
+
+################################################################################
+
+# Covid-19 cases in PM
+
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper")
+
+cases_IT <- read.csv("dpc-covid19-ita-regioni.csv")
+
+cases_PM <- cases_IT[which(cases_IT$denominazione_regione=="Piemonte"),]
+
+data_casesPM <- data.frame(day = as.Date(cases_PM$data),
+                           cases = cases_PM$totale_positivi)
+
+data_casesPM_time <- data_casesPM[data_casesPM$day >= "2021-11-02" & data_casesPM$day <= "2021-11-20",]
+
+p_casesPM_time <- ggplot(data_casesPM_time, aes(x=day, y=cases)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_casesPM_time
+
+################################################################################
+
+# La Stampa Covid-19 coverage
+# The data start from 2021-11-02 and end on 2021-11-20 (like ER)
+
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper/press coverage")
+
+lstmp <- read.table("lstmp_time.txt", sep="\t", header=TRUE)
+
+lstmp$sum_thin <- lstmp$Outbreaks.Epidemics + 
+  lstmp$Novel.Coronaviruses + lstmp$Infectious.Diseases + 
+  lstmp$Immunizations
+
+lstmp$ratio_thin <- lstmp$sum_thin / lstmp$tot_n_art
+
+data_lstmp_time <- data.frame(day = as.Date(lstmp$date),
+                             art = lstmp$ratio_thin)
+
+p_lstmp_time <- ggplot(data_lstmp_time, aes(x=day, y=art)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_lstmp_time
+
+################################################################################
+
+# Representation of coverage and movement in a single graph
+
+data_tot_PM <- data_mov21_PM_time
+data_tot_PM$art <- data_lstmp_time$art
+data_tot_PM$cases <- data_casesPM_time$cases
+
+colnames(data_tot_PM) <- c("Date","Moving individuals", "COVID-19 coverage", "COVID-19 cases")
+
+z_PM <- read.zoo(data_tot_PM)
+
+autoplot(z_PM) +
+  facet_free() +
+  scale_x_date(date_breaks = "1 week", date_minor_breaks = "1 day", limits = c(as.Date("2021-10-25"), as.Date("2021-11-20"))) +
+  xlab("Date") +
+  ylab("Piemonte")
+  
+################################################################################
+
+# Scatterplots
+
+p_lstmp_mov <- ggplot(data_tot_PM, aes(x = `COVID-19 coverage`, y = `Moving individuals`)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(y = "Moving individuals",
+       x = "COVID-19 coverage in La Stampa") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_lstmp_mov
+
+# scatter w next day
+
+shift <- function(x, n){
+  c(x[-(seq(n))], rep(NA, n))
+}
+
+data_Ntot_PM <- data_tot_PM
+data_Ntot_PM$`Moving individuals` <- shift(data_Ntot_PM$`Moving individuals`, 1)
+
+p_Ntot_PM <- ggplot(data_Ntot_PM, aes(x = `COVID-19 coverage`, y = `Moving individuals`)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(y = "Moving individuals one day after publication",
+       x = "COVID-19 coverage on La Stampa") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_Ntot_PM
+
+# scatter w next next day
+
+data_NNtot_PM <- data_Ntot_PM
+data_NNtot_PM$`Moving individuals` <- shift(data_NNtot_PM$`Moving individuals`, 1)
+
+p_NNtot_PM <- ggplot(data_NNtot_PM, aes(x = `COVID-19 coverage`, y = `Moving individuals`)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(y = "Moving individuals two days after publication",
+       x = "COVID-19 coverage on La Stampa") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_NNtot_PM
+
+p_lstmp_mov + p_Ntot_PM + p_NNtot_PM
+
+################################################################################
+
+# Weather 
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper")
+
+weather <- read.table("weather.txt", sep="\t", header=TRUE)
+weather_PM <- weather[weather$date >= "2021-11-02" & weather$date <= "2021-11-20",]
+
+data_tot_PM$w_ER <- weather_PM$ER
+data_tot_PM$w_PM <- weather_PM$PM
+
+# Invert 1 and 0 values so that 0 is rain
+data_tot_PM$w_ER[which(data_tot_PM$w_ER == 0)] <- 2
+data_tot_PM$w_ER <- data_tot_PM$w_ER - 1
+
+data_tot_PM$w_PM[which(data_tot_PM$w_PM == 0)] <- 2
+data_tot_PM$w_PM <- data_tot_PM$w_PM - 1
+
+# Representation of art and mov + color coding for w_ER
+p_tot_PM <- ggplot(data_tot_PM, aes(x = `COVID-19 coverage`, y = `Moving individuals`, color = w_PM)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(title = "Press coverage of COVID-19 and individual movement in Piemonte",
+       y = "Moving individuals",
+       x = "COVID-19 coverage in La Stampa",
+       color = "Weather in Piemonte \n(dark blue = rain)") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_tot_PM
+
+################################################################################
+
+## Emilia-Romagna (ER)
+
+################################################################################
+
+# Open Facebook Movement Range data
+
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper/movement-range-data-2021-11-21")
+
+mov21 <- read.table("movement-range-2021-11-21.txt", sep="\t", fill=TRUE, header=TRUE, quote="", encoding="UTF-8")
+
+mov21_ita <- mov21[which(mov21$country=="ITA"),]
+
+mov21_ER <- mov21_ita[which(mov21_ita$polygon_name=="Emilia-Romagna"),]
+
+mov21_ER$ratio_multiple_tile_users <- 1 - mov21_ER$all_day_ratio_single_tile_users
+
+# Time series
+# Create data_mov21_ER (a df with the two relevant vars)
+# Create p_mov21_ER that is a ggplot of data
+
+data_mov21_ER <- data.frame(
+  day = as.Date(mov21_ER$ds),
+  mov = mov21_ER$ratio_multiple_tile_users)
+
+p_mov21_ER <- ggplot(data_mov21_ER, aes(x=day, y=mov)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_mov21_ER
+
+# Create p_mov21_ER_time that focuses on my time of interest
+# The time frame I study is from 25 Oct 2021 to 20 Nov 2021
+
+data_mov21_ER_time <- data_mov21_ER[data_mov21_ER$day >= "2021-10-25" & data_mov21_ER$day <= "2021-11-20",]
+
+p_mov21_ER_time <- ggplot(data_mov21_ER_time, aes(x=day, y=mov)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_mov21_ER_time
+
+################################################################################
+
+# Covid-19 cases in ER
+
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper")
+
+cases_IT <- read.csv("dpc-covid19-ita-regioni.csv")
+
+cases_ER <- cases_IT[which(cases_IT$denominazione_regione=="Emilia-Romagna"),]
+
+data_casesER <- data.frame(day = as.Date(cases_ER$data),
+                           cases = cases_ER$totale_positivi)
+
+p_casesER <- ggplot(data_casesER, aes(x=day, y=cases)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1)) 
+
+p_casesER
+
+data_casesER_time <- data_casesER[data_casesER$day >= "2021-10-25" & data_casesER$day <= "2021-11-20",]
+
+p_casesER_time <- ggplot(data_casesER_time, aes(x=day, y=cases)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_casesER_time
+
+################################################################################
+
+# Printed press Covid-19 coverage
+# QN Il Resto del Carlino
+
+library(readxl)
+
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper/press coverage")
+
+irdc <- read.table("irdc_time.txt", sep="\t", header=TRUE)
+
+irdc$sum_thin <- irdc$Outbreaks.Epidemics + 
+  irdc$Novel.Coronaviruses + irdc$Infectious.Diseases + 
+  irdc$Immunizations
+
+irdc$ratio_old_copy <- irdc$ratio_cov_tot
+
+irdc$ratio_thin <- irdc$sum_thin / irdc$tot_n_art
+
+data_irdc_time <- data.frame(day = as.Date(irdc$date),
+                             art = irdc$ratio_thin)
+
+p_irdc_time <- ggplot(data_irdc_time, aes(x=day, y=art)) +
+  geom_line() + 
+  geom_point() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+p_irdc_time
+
+################################################################################
+
+# Representation of coverage and movement in a single graph
+
+install.packages("patchwork")
+library(patchwork)
+
+# Representation of the two graphs separated 
+p_irdc_time + p_mov21_ER_time
+
+# Representation of the three graphs separated
+p_irdc_time + p_mov21_ER_time + p_casesER_time
+
+# Unique df with irdc and mov
+data_irdc_mov <- data_irdc_time
+data_irdc_mov$mov <- data_mov21_ER_time$mov
+
+data_irdc_mov <- data_mov21_ER_time
+data_irdc_mov$art <- data_irdc_time$art
+
+# Unique df w irdc, mov, and cases
+data_irdc_mov_cases <- data_irdc_mov
+data_irdc_mov_cases$cases <- data_casesER_time$cases
+
+colnames(data_irdc_mov_cases) <- c("Date","Moving individuals", "COVID-19 coverage", "COVID-19 cases")
+
+install.packages("zoo")
+library(zoo)
+
+z_ER <- read.zoo(data_irdc_mov_cases)
+
+plot(z_ER)
+plot(z_ER, screen = 1)
+
+library(lattice)
+xyplot(z_ER)
+xyplot(z_ER, screen = 1)
+
+# this is the right one // need to change axis names + title
+library(ggplot2)
+autoplot(z_ER) + 
+  facet_free() + 
+  scale_x_date(date_breaks = "1 week", date_minor_breaks = "1 day", limits = c(as.Date("2021-10-25"), as.Date("2021-11-20"))) +
+  xlab("Date") +
+  ylab("Emilia-Romagna")
+
+################################################################################
+
+# Scatterplot art and mov
+
+plot(data_irdc_mov_cases$`COVID-19 coverage`, data_irdc_mov_cases$`Moving individuals`)
+
+model <- lm(art ~ mov, data = data_irdc_mov_cases)
+model
+
+plot(mov ~ art, data = data_irdc_mov_cases)
+
+p_irdc_mov <- ggplot(data_irdc_mov_cases, aes(x = `COVID-19 coverage`, y = `Moving individuals`)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(y = "Moving individuals",
+       x = "COVID-19 coverage in IRdR") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_irdc_mov
+
+################################################################################
+
+# scatterplot w next day
+
+shift <- function(x, n){
+  c(x[-(seq(n))], rep(NA, n))
+}
+
+data_irdc_NEXTmov_cases <- data_irdc_mov_cases
+data_irdc_NEXTmov_cases$`Moving individuals` <- shift(data_irdc_NEXTmov_cases$`Moving individuals`, 1)
+
+p_irdc_Nmov <- ggplot(data_irdc_NEXTmov_cases, aes(x = `COVID-19 coverage`, y = `Moving individuals`)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(y = "Moving individuals one day after publication",
+       x = "COVID-19 coverage in IRdC") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_irdc_Nmov
+
+# scatterplot w next next day
+
+data_irdc_NNmov_cases <- data_irdc_NEXTmov_cases
+data_irdc_NNmov_cases$`Moving individuals` <- shift(data_irdc_NNmov_cases$`Moving individuals`, 1)
+
+p_irdc_NNmov <- ggplot(data_irdc_NNmov_cases, aes(x = `COVID-19 coverage`, y = `Moving individuals`)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(y = "Moving individuals two days after publication",
+       x = "COVID-19 coverage in IRdC") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_irdc_NNmov
+
+p_irdc_mov +   p_irdc_Nmov + p_irdc_NNmov
+
+################################################################################
+
+# Weather 
+setwd("/Users/simonemariaparazzoli/Documents/Università/Sciences Po/Media and Politics/Research Paper")
+
+weather <- read.table("weather.txt", sep="\t", header=TRUE)
+
+data_tot <- data_irdc_mov_cases
+data_tot$w_ER <- weather$ER
+data_tot$w_PM <- weather$PM
+
+# I change the value of w_ER (0 = rain, 1 = no rain)
+# In this way a 1 is positively (?) affects movement
+data_tot$w_ER[which(data_tot$w_ER == 0)] <- 2
+data_tot$w_ER <- data_tot$w_ER - 1
+
+#m_tot <- lm(mov ~ art + w_ER,
+#               data = data_tot)
+#m_tot
+#summary(m_tot)
+
+# Representation of art and mov + color coding for w_ER
+p_tot_irdc_mov <- ggplot(data_tot, aes(x = `Covid-19 coverage`, y = `Moving individuals`, color = w_ER)) +
+  geom_point(size = 3) +
+  stat_smooth(method = lm) +
+  labs(title = "Press coverage of COVID-19 and individual movement in Emilia-Romagna",
+       y = "Moving individuals",
+       x = "COVID-19 coverage in Il Resto del Carlino",
+       color = "Weather in ER \n(dark blue = rain)") +
+  coord_cartesian(ylim = c(0.6, 0.925))
+
+p_tot_irdc_mov
